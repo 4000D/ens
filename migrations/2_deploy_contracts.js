@@ -1,13 +1,14 @@
 const ENS = artifacts.require("./ENS.sol");
-const FIFSRegistrar = artifacts.require('./FIFSRegistrar.sol');
+const FIFSRegistrar = artifacts.require("./FIFSRegistrar.sol");
+const PublicResolver = artifacts.require("./PublicResolver.sol");
 
 // Currently the parameter('./ContractName') is only used to imply
 // the compiled contract JSON file name. So even though `Registrar.sol` is
 // not existed, it's valid to put it here.
 // TODO: align the contract name with the source code file name.
-const Registrar = artifacts.require('./Registrar.sol');
-const web3 = new (require('web3'))();
-const namehash = require('../node_modules/eth-ens-namehash');
+const Registrar = artifacts.require("./Registrar.sol");
+const web3 = new (require("web3"))();
+const namehash = require("../node_modules/eth-ens-namehash");
 
 /**
  * Calculate root node hashes given the top level domain(tld)
@@ -17,7 +18,9 @@ const namehash = require('../node_modules/eth-ens-namehash');
 function getRootNodeFromTLD(tld) {
   return {
     namehash: namehash(tld),
-    sha3: web3.sha3(tld)
+    // sha3: web3.utils.sha3(tld),
+    sha3: web3.utils.soliditySha3(tld),
+    // sha3: web3.sha3(tld),
   };
 }
 
@@ -28,18 +31,19 @@ function getRootNodeFromTLD(tld) {
  * @param {string} tld tld which the FIFS registrar takes charge of
  */
 function deployFIFSRegistrar(deployer, tld) {
-  var rootNode = getRootNodeFromTLD(tld);
+  const rootNode = getRootNodeFromTLD(tld);
+  const sampleDomain = "4000d";
 
   // Deploy the ENS first
   deployer.deploy(ENS)
-    .then(() => {
+    .then(() =>
       // Deploy the FIFSRegistrar and bind it with ENS
-      return deployer.deploy(FIFSRegistrar, ENS.address, rootNode.namehash);
-    })
-    .then(function() {
+      deployer.deploy(FIFSRegistrar, ENS.address, rootNode.namehash),
+    )
+    .then(() =>
       // Transfer the owner of the `rootNode` to the FIFSRegistrar
-      ENS.at(ENS.address).setSubnodeOwner('0x0', rootNode.sha3, FIFSRegistrar.address);
-    });
+      ENS.at(ENS.address).setSubnodeOwner("0x0", rootNode.sha3, FIFSRegistrar.address),
+    ).then(() => deployer.deploy(PublicResolver, ENS.address));
 }
 
 /**
@@ -49,29 +53,26 @@ function deployFIFSRegistrar(deployer, tld) {
  * @param {string} tld tld which the Hash registrar takes charge of
  */
 function deployAuctionRegistrar(deployer, tld) {
-  var rootNode = getRootNodeFromTLD(tld);
+  const rootNode = getRootNodeFromTLD(tld);
 
   // Deploy the ENS first
   deployer.deploy(ENS)
-    .then(() => {
+    .then(() =>
       // Deploy the HashRegistrar and bind it with ENS
       // The last argument `0` specifies the auction start date to `now`
-      return deployer.deploy(Registrar, ENS.address, rootNode.namehash, 0);
-    })
-    .then(function() {
+      deployer.deploy(Registrar, ENS.address, rootNode.namehash, 0),
+    ).then(() => {
       // Transfer the owner of the `rootNode` to the HashRegistrar
-      ENS.at(ENS.address).setSubnodeOwner('0x0', rootNode.sha3, Registrar.address);
-    });
+      ENS.at(ENS.address).setSubnodeOwner("0x0", rootNode.sha3, Registrar.address);
+    }).then(() => deployer.deploy(PublicResolver, ENS.address));
 }
 
-module.exports = function(deployer, network) {
-  var tld = 'eth';
+module.exports = function (deployer, network) {
+  const tld = "eth";
 
-  if (network === 'dev.fifs') {
+  if (network === "dev.fifs") {
     deployFIFSRegistrar(deployer, tld);
-  }
-  else if (network === 'dev.auction') {
+  } else if (network === "dev.auction") {
     deployAuctionRegistrar(deployer, tld);
   }
-
 };
